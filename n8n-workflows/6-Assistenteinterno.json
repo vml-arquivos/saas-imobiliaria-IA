@@ -1,0 +1,912 @@
+{
+  "name": "6 -  Assistente interno",
+  "nodes": [
+    {
+      "parameters": {
+        "chatId": "={{ $('Info').item.json.telegram_chat_id }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2192,
+        160
+      ],
+      "id": "b0f7170d-faaf-4829-8468-8f184d29240a",
+      "name": "Responder Telegram",
+      "webhookId": "21855174-4f7f-49f5-b8f4-a284d6ee4ddf"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        160,
+        160
+      ],
+      "id": "6eb6dde3-0fbf-4726-829a-c4fc1b3ea58b",
+      "name": "Receber Mensagem Telegram",
+      "webhookId": "f2b29356-d5d3-4f5d-9ef1-273001c0a820"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.mensagem }}",
+        "options": {
+          "systemMessage": "=<system_message>\n<overall_instructions>\nVocê é um assistente administrativo interno da Clínica Medtech. Sua função é receber solicitações diretas dos profissionais da clínica (médicos, dentistas) via mensagem e executar tarefas de back-office. Você deve ser eficiente, direto e preciso. Sua resposta final, que será enviada de volta ao profissional, NUNCA DEVE usar formatação Markdown (*, #, etc.).\n</overall_instructions>\n\n<identity>\n<name>Assistente Interno</name>\n<role>Assistente Administrativo dos Profissionais da Clínica</role>\n<purpose>Reagendar consultas em massa a pedido de um profissional, gerenciar listas de tarefas/compras e ler e-mails quando solicitado.</purpose>\n<tone>Profissional, empático, acolhedor e focado na execução.</tone>\n</identity>\n\n<available_agents_and_tools>\n    <agent name=\"AgenteDeCalendario\">\n        <description>Use este agente para TODAS as operações de leitura e escrita no Google Calendar.</description>\n        <tools>\n            <tool name=\"Buscar_todos_os_eventos\">\n                <purpose>Lista todos os eventos em um período de tempo para um calendário específico.</purpose>\n                <contract><input>json { \"agenda_id\": \"string\", \"data_inicio\": \"datetime\", \"data_fim\": \"datetime\" }</input></contract>\n            </tool>\n            <tool name=\"Criar_evento\">\n                <purpose>Cria um novo evento (tarefa) na agenda.</purpose>\n                <contract><input>json { \"agenda_id\": \"string\", \"titulo\": \"string\", \"data_inicio\": \"datetime\", \"data_fim\": \"datetime\" }</input></contract>\n            </tool>\n        </tools>\n    </agent>\n\n    <tool name=\"Enviar_reagendamento\">\n        <description>Envia uma mensagem via WhatsApp para um paciente específico para iniciar o processo de reagendamento.</description>\n        <contract>\n            <input>json { \"id_conversa\": \"string\", \"mensagem\": \"string\" }</input>\n            <output>json { \"status\": \"success\" | \"error\" }</output>\n        </contract>\n    </tool>\n\n    <tool name=\"Criar_tarefa\">\n        <description>Adiciona um item a uma lista interna, como a lista de compras do escritório ou uma lista de tarefas geral.</description>\n        <contract>\n            <input>json { \"lista\": \"string ('compras' ou 'tarefas')\", \"item_descricao\": \"string\" }</input>\n            <output>json { \"status\": \"success\", \"item_id\": \"string\" }</output>\n        </contract>\n    </tool>\n\n    <tool name=\"Ler_emails\">\n        <description>Acessa a caixa de entrada principal da clínica, lê os e-mails não lidos e retorna um resumo.</description>\n        <contract>\n            <input>json { \"limite\": \"integer (número de e-mails a ler)\" }</input>\n            <output>json { \"resumos\": \"array de strings\" }</output>\n        </contract>\n    </tool>\n\n    <tool name=\"Salvar_memoria\">\n        <description>Registra no banco de dados que uma mensagem foi enviada a um paciente.</description>\n        <contract><input>json { \"session_id\": \"string (telefone do paciente)\", \"message\": \"string (mensagem enviada)\" }</input></contract>\n    </tool>\n\n    <tool name=\"Refletir\">\n        <description>Registra pensamentos ou passos intermediários para raciocínios complexos.</description>\n        <contract><input>json { \"note\": \"string\" }</input></contract>\n    </tool>\n</available_agents_and_tools>\n\n<process_flows>\n    <workflow name=\"Processo_de_Reagendamento\">\n        <description>Acionado quando um profissional pede para reagendar as consultas de um dia.</description>\n        <steps>\n            1.  Identifique qual profissional fez o pedido e para qual(is) data(s) ele precisa reagendar.\n            2.  Consulte a `knowledge_base` para encontrar o `calendar_id` correto do profissional.\n            3.  Use a ferramenta `Buscar_todos_os_eventos` do `AgenteDeCalendario` para listar todas as consultas no período solicitado.\n            4.  Para cada consulta encontrada, extraia o nome do paciente, o telefone e o `id_conversa` da descrição do evento.\n            5.  Formule uma mensagem empática para o paciente. Exemplo: \"Olá [Nome do Paciente], sou da Clínica Medtech. O(A) Dr(a). [Nome do Profissional] teve um imprevisto e precisará reagendar sua consulta de amanhã. Em breve entraremos em contato para oferecer novos horários. Agradecemos a compreensão.\"\n            6.  Invoque a ferramenta `Enviar_reagendamento` para cada paciente, passando a mensagem e o `id_conversa`.\n            7.  **MUITO IMPORTANTE:** Após cada envio, use a ferramenta `Salvar_memoria`.\n            8.  Ao final, responda ao PROFISSIONAL com um resumo da operação. Exemplo: \"Entendido, Dr. João. O processo de reagendamento para suas 5 consultas de amanhã já foi iniciado. Os pacientes serão notificados.\"\n        </steps>\n    </workflow>\n    <workflow name=\"Outras_Tarefas\">\n        <description>Para outras solicitações do profissional.</description>\n        <steps>\n            - Se o pedido for para adicionar algo à lista de compras, use a ferramenta `Criar_tarefa` com o parâmetro `lista: 'compras'`.\n            - Se for para agendar uma tarefa (ex: \"me lembre de ligar para o laboratório\"), use a ferramenta `Criar_evento` do `AgenteDeCalendario`.\n            - Se for para ler e-mails, use a ferramenta `Ler_emails` e apresente o resumo de forma clara.\n            - Responda sempre ao profissional confirmando que a tarefa foi executada. Exemplo: \"Ok, adicionei 'café em grão' à lista de compras.\" ou \"Certo, agendado: Ligar para o laboratório amanhã às 10h.\"\n        </steps>\n    </workflow>\n</process_flows>\n\n<knowledge_base>\n    <professionals>\n        <professional name=\"Dr. João Paulo Ferreira\" specialty=\"Médico - Clínico Geral\" calendar_id=\"ad05035cf3a83c807928d6847453c0ea70ae944b410fecd95bc220bbb9058cc3@group.calendar.google.com\"/>\n        <professional name=\"Dr. Roberto Almeida\" specialty=\"Médico - Cardiologia\" calendar_id=\"1fbdae28356e65294fad49b4c3f58029b66edd15b5466873474696d1c987f2af@group.calendar.google.com\"/>\n        <professional name=\"Dra. Ana Silva\" specialty=\"Dentista - Clínica Geral\" calendar_id=\"486ef2447acae1bb6697b6d2caff83077fa7bcf4d76711f9e8f2ed4c4d9f6040@group.calendar.google.com\"/>\n        <professional name=\"Dra. Carla Mendes\" specialty=\"Dentista - Odontopediatria\" calendar_id=\"ed81f3e880472ed7f2d44d4ee62f2a2470d623e8f8c4af0826d1c62deb5f15f9@group.calendar.google.com\"/>\n    </professionals>\n</knowledge_base>\n</system_message>"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        1824,
+        160
+      ],
+      "id": "26db7063-7f35-4f8b-8844-65a9089fa5aa",
+      "name": "Assistente do escritório interno"
+    },
+    {
+      "parameters": {
+        "content": "## Assistente interno\n",
+        "height": 560,
+        "width": 2460,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "9c0048f8-103c-41e5-8d37-4709a20fb172",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Salva a informação de agendamento enviada, para que a secretária saiba que foi enviada.",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "n8n_historico_mensagens",
+          "mode": "list",
+          "cachedResultName": "n8n_historico_mensagens"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "session_id": "={{ $fromAI('telefone', 'Telefone do paciente, formatado com apenas números, incluindo código do país. Ex.: \"551112345678\"', 'string') }}",
+            "message": "={ \"type\": \"ai\", \"content\": \"{{ $fromAI('message', 'A mesma mensagem enviada para o paciente.', 'string') }}\" }"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [
+        1584,
+        400
+      ],
+      "id": "97f6c39e-83d2-4211-9de8-4cec49a19bbf",
+      "name": "Salvar memoria"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 5,
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.1,
+      "position": [
+        2128,
+        400
+      ],
+      "id": "b979e1b6-ebd4-4a41-9445-cb078e913120",
+      "name": "Ler emails",
+      "webhookId": "dde17a90-60a1-42ad-9a09-06cf2fbb3105"
+    },
+    {
+      "parameters": {
+        "task": "YXdwUHJaRVoxWDdudFNGNg",
+        "title": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Title', ``, 'string') }}",
+        "additionalFields": {
+          "dueDate": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Due_Date', ``, 'string') }}",
+          "notes": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Notes', ``, 'string') }}",
+          "status": "needsAction"
+        }
+      },
+      "type": "n8n-nodes-base.googleTasksTool",
+      "typeVersion": 1,
+      "position": [
+        1984,
+        400
+      ],
+      "id": "77d5743c-2715-4552-9291-0878e3cf87a0",
+      "name": "Criar tarefa"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "49442736-3bfb-481c-bb72-7cc13e8896db",
+              "name": "url_chatwoot",
+              "value": "http://165.227.98.192:3000",
+              "type": "string"
+            },
+            {
+              "id": "2c4f57f2-8175-43e9-8d59-2796b2ebf488",
+              "name": "telegram_chat_id",
+              "value": "={{ $('Receber Mensagem Telegram').item.json.message.chat.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        384,
+        160
+      ],
+      "id": "791545f5-506e-4a67-94fb-b299dd06638b",
+      "name": "Info"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "assistente_interno",
+        "tableName": "n8n_historico_mensagens",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        1440,
+        400
+      ],
+      "id": "decc118f-8e43-420d-9f00-9a80516e649e",
+      "name": "Postgres Chat Memory"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-1.5-flash-latest",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        400
+      ],
+      "id": "67a3b312-c013-4eef-afda-71638825261f",
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        2272,
+        400
+      ],
+      "id": "c43f525d-1591-431a-856c-d153f5016943",
+      "name": "Refletir"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Receber Mensagem Telegram').item.json.message.voice }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "object",
+                      "operation": "exists",
+                      "singleValue": true
+                    },
+                    "id": "48feeb05-d1a0-45a7-9e6b-04faef4b5175"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Áudio"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "8cf1a12e-bd0a-4ac6-a33c-6748438c9c8a",
+                    "leftValue": "={{ $('Receber Mensagem Telegram').item.json.message.text }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Texto"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        832,
+        160
+      ],
+      "id": "42e8d54f-00f9-4d35-a3ee-24386afb416c",
+      "name": "Tipo de mensagem"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "45efc554-3f74-4922-a2cf-f64d2ea084c0",
+              "name": "mensagem",
+              "value": "={{ $('Receber Mensagem Telegram').item.json.message.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1104,
+        272
+      ],
+      "id": "c0431eec-4627-4e96-99d0-a122b4739719",
+      "name": "Set mensagem texto"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0e95db55-1b2e-4762-a547-9481029291e9",
+              "name": "mensagem",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1552,
+        64
+      ],
+      "id": "258c452b-d3a0-43b3-a604-c86e9a143d00",
+      "name": "Set mensagem áudio"
+    },
+    {
+      "parameters": {
+        "description": "Use essa ferramenta para enviar as informações de reagendamento no WhatsApp.\n\nO ID da conversa deve ser extraído das informações do evento.",
+        "workflowId": {
+          "__rl": true,
+          "value": "iiIBw9aT2wZoC4NP",
+          "mode": "list",
+          "cachedResultName": "## 5. Enviar agendamento"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mensagem": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('mensagem', ``, 'string') }}",
+            "id_conversa": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('id_conversa', ``, 'string') }}",
+            "id_conta": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('id_conta', ``, 'string') }}",
+            "url_chatwoot": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('url_chatwoot', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "mensagem",
+              "displayName": "mensagem",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "id_conta",
+              "displayName": "id_conta",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "id_conversa",
+              "displayName": "id_conversa",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "url_chatwoot",
+              "displayName": "url_chatwoot",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1840,
+        400
+      ],
+      "id": "d7ac0a5d-eca9-4fe5-980d-053be0abcc91",
+      "name": "Enviar agendamento"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $('Receber Mensagem Telegram').item.json.message.voice.file_id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1104,
+        64
+      ],
+      "id": "596f5661-318f-4fd8-ba4d-d3ef77401388",
+      "name": "Download áudio",
+      "webhookId": "9b28d599-c57f-4ecf-94a1-6334f7dabf6d"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Info').item.json.url_chatwoot }}/api/v1/profile",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "chatwootApi",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        592,
+        160
+      ],
+      "id": "3ad3734b-ede1-4b89-abc9-ebc2603c4c70",
+      "name": "Buscar informações da conta"
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-1.5-pro-latest",
+          "mode": "list",
+          "cachedResultName": "models/gemini-1.5-pro-latest"
+        },
+        "inputType": "binary",
+        "simplify": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        48
+      ],
+      "id": "17ad9ce8-48dd-4931-9938-c271ef690ab9",
+      "name": "Transcribe a recording"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Calendar', ``, 'string') }}",
+          "__regex": "(^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)*)"
+        },
+        "eventId": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Event_ID', ``, 'string') }}",
+        "updateFields": {
+          "end": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('End', ``, 'string') }}",
+          "start": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Start', ``, 'string') }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        1728,
+        768
+      ],
+      "id": "e4816715-d756-45dc-9684-d63a43451e84",
+      "name": "Atualizar Evento"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Calendar', ``, 'string') }}",
+          "__regex": "(^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)*)"
+        },
+        "eventId": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Event_ID', ``, 'string') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        1856,
+        768
+      ],
+      "id": "e70af258-513a-4fc9-b208-2606039a401f",
+      "name": "Apagar Evento"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Calendar', ``, 'string') }}",
+          "__regex": "(^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)*)"
+        },
+        "returnAll": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Return_All', ``, 'boolean') }}",
+        "timeMin": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('After', `the day before the date the user requested`, 'string') }}",
+        "timeMax": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Before', `the day after the date the user requested`, 'string') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        1600,
+        912
+      ],
+      "id": "ccfe59b0-342a-48e4-a356-ab01b4795b41",
+      "name": "Buscar Eventos"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Calendar', ``, 'string') }}",
+          "__regex": "(^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)*)"
+        },
+        "start": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Start', ``, 'string') }}",
+        "end": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('End', ``, 'string') }}",
+        "additionalFields": {
+          "attendees": [],
+          "summary": "={{ $fromAI('Summary', ``, 'string') }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        1728,
+        912
+      ],
+      "id": "fedc0434-2139-4cea-afaf-a0a197a35d49",
+      "name": "Criar Evento"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Calendar', ``, 'string') }}",
+          "__regex": "(^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)*)"
+        },
+        "start": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Start', ``, 'string') }}",
+        "end": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('End', ``, 'string') }}",
+        "additionalFields": {
+          "attendees": [
+            "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('attendees0_Attendees', ``, 'string') }}"
+          ],
+          "summary": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Summary', ``, 'string') }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        1856,
+        912
+      ],
+      "id": "b3ca83e1-fa20-4cac-b3cd-9cd4ff2e6321",
+      "name": "Criar Evento Com Participante"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Você é um assistente que gerencia meu calendário",
+        "text": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Prompt__User_Message_', ``, 'string') }}",
+        "options": {
+          "systemMessage": "=<SystemProperty>\n  <Meta>\n    <Name>AgenteDeCalendario_MeditecH_v1</Name>\n    <Description>\n      Multiagente de agenda médica da clínica MeditecH. \n      Atua exclusivamente sob comando do Agente Orquestrador (Clara/Laura).\n      Responsável por criar, buscar, atualizar e excluir eventos nos calendários médicos.\n    </Description>\n    <GeneratedAt>{{ $now.format('FFFF') }}</GeneratedAt>\n  </Meta>\n\n  <Agent name=\"AgenteDeCalendario\" role=\"Assistente de Agenda Médica\">\n    <identity>\n      <description>\n        Você é o agente de calendário da clínica MeditecH.\n        Seu papel é executar operações de agenda **somente quando instruído pelo Orquestrador**.\n        Nunca interaja diretamente com pacientes, apenas processe requisições.\n      </description>\n    </identity>\n\n    <goals>\n      <goal>Criar eventos de consulta (com ou sem participante)</goal>\n      <goal>Buscar eventos para checagem de disponibilidade</goal>\n      <goal>Atualizar eventos existentes</goal>\n      <goal>Excluir eventos quando solicitado</goal>\n      <goal>Devolver sempre o link do evento alterado/criado</goal>\n      <goal>Operar em sincronia com os demais multiagentes (Email, Contatos, etc.)</goal>\n    </goals>\n  </Agent>\n\n  <Tools>\n    <Tool name=\"Criar_Evento\">\n      <Description>Criar evento sem participantes (consulta individual).</Description>\n      <Contract>\n        <Input>{ \"summary\":\"string\",\"start\":\"datetime\",\"end\":\"datetime\",\"calendarId\":\"string\" }</Input>\n        <Output>{ \"status\":\"created\",\"eventId\":\"string\",\"htmlLink\":\"url\" }</Output>\n      </Contract>\n    </Tool>\n\n    <Tool name=\"Criar_Evento_Com_Participante\">\n      <Description>Criar evento com participante (necessário email do paciente).</Description>\n      <Contract>\n        <Input>{ \"summary\":\"string\",\"start\":\"datetime\",\"end\":\"datetime\",\"calendarId\":\"string\",\"attendees\":[\"email\"] }</Input>\n        <Output>{ \"status\":\"created\",\"eventId\":\"string\",\"htmlLink\":\"url\" }</Output>\n      </Contract>\n    </Tool>\n\n    <Tool name=\"Buscar_Eventos\">\n      <Description>Buscar todos os eventos em um calendário (ex.: para verificar disponibilidade).</Description>\n      <Contract>\n        <Input>{ \"calendarId\":\"string\",\"timeMin\":\"datetime\",\"timeMax\":\"datetime\" }</Input>\n        <Output>{ \"events\":[...] }</Output>\n      </Contract>\n    </Tool>\n\n    <Tool name=\"Atualizar_Evento\">\n      <Description>Atualizar dados de um evento existente (usar após Buscar_Eventos para pegar o ID).</Description>\n      <Contract>\n        <Input>{ \"calendarId\":\"string\",\"eventId\":\"string\",\"updates\":{...} }</Input>\n        <Output>{ \"status\":\"updated\",\"htmlLink\":\"url\" }</Output>\n      </Contract>\n    </Tool>\n\n    <Tool name=\"Apagar_Evento\">\n      <Description>Excluir evento existente (usar após Buscar_Eventos para pegar o ID).</Description>\n      <Contract>\n        <Input>{ \"calendarId\":\"string\",\"eventId\":\"string\" }</Input>\n        <Output>{ \"status\":\"deleted\" }</Output>\n      </Contract>\n    </Tool>\n  </Tools>\n\n  <Rules>\n    <rule>Sempre receber instruções do Orquestrador (Clara/Laura), nunca do paciente direto.</rule>\n    <rule>Retornar resultados objetivos (status, link do evento, ID quando necessário).</rule>\n    <rule>Se não houver dados suficientes (ex.: email para Criar_Evento_Com_Participante), retornar erro claro.</rule>\n    <rule>Assumir duração de 1 hora caso não seja especificada.</rule>\n    <rule>Usar sempre os IDs corretos de agenda médica informados no prompt principal.</rule>\n  </Rules>\n</SystemProperty>\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agentTool",
+      "typeVersion": 2.2,
+      "position": [
+        1584,
+        576
+      ],
+      "id": "85781c0f-9ac5-4ac2-ac1b-ef25cbbdcfa2",
+      "name": "AgenteDeCalendario"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-1.5-flash-latest",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1472,
+        736
+      ],
+      "id": "fe8fc37a-def2-4695-9581-881ac590db61",
+      "name": "Google Gemini Chat Model4"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receber Mensagem Telegram": {
+      "main": [
+        [
+          {
+            "node": "Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assistente do escritório interno": {
+      "main": [
+        [
+          {
+            "node": "Responder Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar memoria": {
+      "ai_tool": [
+        [
+          {
+            "node": "Assistente do escritório interno",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler emails": {
+      "ai_tool": [
+        [
+          {
+            "node": "Assistente do escritório interno",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar tarefa": {
+      "ai_tool": [
+        [
+          {
+            "node": "Assistente do escritório interno",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Info": {
+      "main": [
+        [
+          {
+            "node": "Buscar informações da conta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Assistente do escritório interno",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Assistente do escritório interno",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refletir": {
+      "ai_tool": [
+        [
+          {
+            "node": "Assistente do escritório interno",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tipo de mensagem": {
+      "main": [
+        [
+          {
+            "node": "Download áudio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set mensagem texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set mensagem texto": {
+      "main": [
+        [
+          {
+            "node": "Assistente do escritório interno",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set mensagem áudio": {
+      "main": [
+        [
+          {
+            "node": "Assistente do escritório interno",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar agendamento": {
+      "ai_tool": [
+        [
+          {
+            "node": "Assistente do escritório interno",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download áudio": {
+      "main": [
+        [
+          {
+            "node": "Transcribe a recording",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar informações da conta": {
+      "main": [
+        [
+          {
+            "node": "Tipo de mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe a recording": {
+      "main": [
+        [
+          {
+            "node": "Set mensagem áudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualizar Evento": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgenteDeCalendario",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apagar Evento": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgenteDeCalendario",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Eventos": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgenteDeCalendario",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Evento": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgenteDeCalendario",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Evento Com Participante": {
+      "ai_tool": [
+        [
+          {
+            "node": "AgenteDeCalendario",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AgenteDeCalendario",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AgenteDeCalendario": {
+      "ai_tool": [
+        [
+          {
+            "node": "Assistente do escritório interno",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e4c307b0-5f2b-497a-b4d1-bc2d72a5495d",
+  "meta": {
+    "instanceId": "f286cafba5b58d8b1023cfee294dd91e7783c809b9ecb33b534a8fef85bb1af7"
+  },
+  "id": "EzefsHytdICPPIXl",
+  "tags": []
+}

@@ -1,0 +1,125 @@
+{
+  "name": "8 - Buscar Historico Cliente",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "session_id"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f9d18dd5-8e53-4749-ad8a-bf5cf9b335ab",
+      "name": "When Called"
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "n8n_chat_histories",
+          "mode": "list"
+        },
+        "returnAll": true,
+        "where": {
+          "values": [
+            {
+              "column": "session_id",
+              "value": "={{ $json.session_id }}"
+            }
+          ]
+        },
+        "sort": {
+          "values": [
+            {
+              "column": "created_at",
+              "direction": "DESC"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        192,
+        0
+      ],
+      "id": "c8a3d209-9e7a-48fa-9724-0abe6fef4408",
+      "name": "Buscar Mensagens",
+      "credentials": {
+        "postgres": {
+          "id": "ekqY1gcIc1y9RfUY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nif (items.length === 0) {\n  return [{ json: { historico: \"📭 Nenhuma conversa anterior encontrada.\" } }];\n}\n\nlet texto = \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\";\ntexto += \"📋 HISTÓRICO DE CONVERSAS\\n\";\ntexto += \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\n\";\n\nitems.forEach((item) => {\n  let conteudo = 'Sem conteúdo';\n  let tipo = '👤';\n  let msg = item.json.message;\n  \n  if (typeof msg === 'string') {\n    try {\n      const obj = JSON.parse(msg);\n      conteudo = obj.content || 'Sem conteúdo';\n      tipo = obj.type === 'ai' ? '🤖' : '👤';\n    } catch (e) {\n      conteudo = msg;\n    }\n  } else if (msg && typeof msg === 'object') {\n    conteudo = msg.content || 'Sem conteúdo';\n    tipo = msg.type === 'ai' ? '🤖' : '👤';\n  }\n  \n  const data = new Date(item.json.created_at).toLocaleString('pt-BR', {\n    day: '2-digit',\n    month: '2-digit',\n    hour: '2-digit',\n    minute: '2-digit'\n  });\n  \n  if (conteudo.length > 300) {\n    conteudo = conteudo.substring(0, 297) + '...';\n  }\n  \n  texto += `${data} ${tipo}: ${conteudo}\\n\\n`;\n});\n\ntexto += \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\";\n\nreturn [{ json: { historico: texto } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ],
+      "id": "d4a34f5b-1f7c-45fe-a1fb-2af37cf07f6e",
+      "name": "Formatar Histórico"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Called": {
+      "main": [
+        [
+          {
+            "node": "Buscar Mensagens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Mensagens": {
+      "main": [
+        [
+          {
+            "node": "Formatar Histórico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar Histórico": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "64bf838f-d590-4631-a5e1-1c05d1b5e598",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f286cafba5b58d8b1023cfee294dd91e7783c809b9ecb33b534a8fef85bb1af7"
+  },
+  "id": "zWlmFsGTi4c9EhUq",
+  "tags": []
+}

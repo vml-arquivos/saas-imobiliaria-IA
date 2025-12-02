@@ -1,0 +1,168 @@
+{
+  "name": "7 - Atualizar Status e Contexto",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "session_id"
+            },
+            {
+              "name": "status"
+            },
+            {
+              "name": "ultimo_contexto",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "20584283-da6d-4551-af42-614ac2b05c95",
+      "name": "When Called"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "n8n_status_atendimento",
+          "mode": "list",
+          "cachedResultName": "n8n_status_atendimento"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "session_id": "={{ $json.session_id }}",
+            "status": "={{ $json.status }}",
+            "ultimo_contexto": "={{ JSON.stringify($json.ultimo_contexto) }}",
+            "updated_at": "={{ $now }}"
+          },
+          "matchingColumns": [
+            "session_id"
+          ],
+          "schema": [
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "type": "string"
+            },
+            {
+              "id": "ultimo_contexto",
+              "displayName": "ultimo_contexto",
+              "type": "string"
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "type": "dateTime"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        0
+      ],
+      "id": "fdce95c1-93aa-4bba-9836-be124682dbca",
+      "name": "Salvar Status",
+      "credentials": {
+        "postgres": {
+          "id": "ekqY1gcIc1y9RfUY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "resultado",
+              "name": "resultado",
+              "value": "=✅ Status atualizado: {{ $json.status }}",
+              "type": "string"
+            },
+            {
+              "id": "session",
+              "name": "session_id",
+              "value": "={{ $json.session_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        400,
+        0
+      ],
+      "id": "be977967-b33f-450e-8f37-b553c59c19fe",
+      "name": "Formatar Resposta"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Called": {
+      "main": [
+        [
+          {
+            "node": "Salvar Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar Status": {
+      "main": [
+        [
+          {
+            "node": "Formatar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar Resposta": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2cfe5761-b8c9-4c3b-9be8-f3af184c526c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f286cafba5b58d8b1023cfee294dd91e7783c809b9ecb33b534a8fef85bb1af7"
+  },
+  "id": "IPviXcdhLTcsCWZs",
+  "tags": []
+}
